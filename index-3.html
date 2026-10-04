@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>California County Health Explorer</title></head><body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&family=Source+Sans+3:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Layout: one reading column. Choose the question, walk through six animated steps, then use the result
+     (where your county sits, prediction). Same clean academic look as the first version. */
+  :root{
+    --bg:#f3f6f9; --surface:#ffffff; --ink:#14202b; --ink-2:#47566a; --line:#d3dbe4;
+    --accent:#0f766e; --accent-ink:#ffffff; --accent-soft:#e0f2ef;
+    --pt:#2f5d8a; --pt-dim:#9db5cc; --hl:#b45309; --hl-soft:#fdf0dc;
+    --flag:#b42318; --flag-soft:#fde8e6; --warn-soft:#fff3d6; --warn-ink:#6b4500;
+    --serif:"Source Serif 4", Georgia, "Times New Roman", serif;
+    --sans:"Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0e1620; --surface:#16212d; --ink:#e7edf3; --ink-2:#a3b3c3; --line:#2a3947;
+      --accent:#3cc4b4; --accent-ink:#06201d; --accent-soft:#16332f;
+      --pt:#86b6e6; --pt-dim:#4b6580; --hl:#fbbf24; --hl-soft:#3a2f12;
+      --flag:#ff8a80; --flag-soft:#3a1f1d; --warn-soft:#3a2f12; --warn-ink:#f0cf8a;
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e1620; --surface:#16212d; --ink:#e7edf3; --ink-2:#a3b3c3; --line:#2a3947;
+    --accent:#3cc4b4; --accent-ink:#06201d; --accent-soft:#16332f;
+    --pt:#86b6e6; --pt-dim:#4b6580; --hl:#fbbf24; --hl-soft:#3a2f12;
+    --flag:#ff8a80; --flag-soft:#3a1f1d; --warn-soft:#3a2f12; --warn-ink:#f0cf8a;
+    color-scheme:dark;
+  }
+  *{ box-sizing:border-box; }
+  [hidden]{ display:none !important; }
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:var(--sans); font-size:17px; line-height:1.55;
+    padding-inline:16px; padding-block:28px 64px;
+  }
+  .wrap{ max-width:1080px; width:100%; min-width:0; margin:0 auto; display:flex; flex-direction:column; gap:24px; }
+  h1,h2,h3{ font-family:var(--serif); font-weight:700; line-height:1.2; margin:0; text-wrap:balance; }
+  h1{ font-size:clamp(28px,5vw,40px); }
+  h2{ font-size:24px; }
+  h3{ font-size:19px; }
+  p{ margin:0; }
+  .sub{ color:var(--ink-2); font-size:18px; margin-top:6px; max-width:62ch; }
+  .eyebrow{ font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:6px; }
+  section{ background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:24px; display:flex; flex-direction:column; gap:16px; min-width:0; }
+  .lead{ color:var(--ink-2); max-width:72ch; }
+  .banner{ border-radius:8px; padding:12px 14px; font-size:16px; }
+  .banner.err{ background:var(--flag-soft); color:var(--flag); }
+  .banner.err ul{ margin:6px 0 0; padding-left:20px; }
+  .banner.note{ background:var(--accent-soft); color:var(--ink); }
+  .banner.warn{ background:var(--warn-soft); color:var(--warn-ink); }
+
+  .sr{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  .tabs{ display:flex; gap:6px; flex-wrap:wrap; }
+  .tab{ border-radius:999px; padding:8px 16px; font-size:16px; }
+  .tab[aria-selected="true"]{ background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+
+  .grid3{ display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr)); gap:16px; }
+  .grid2{ display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); gap:16px; min-width:0; }
+  .field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+  label, .lbl{ font-size:15px; font-weight:600; }
+  .hint{ font-size:14px; color:var(--ink-2); font-weight:400; }
+  input[type=text], input[type=number], select, textarea{
+    width:100%; font:inherit; font-size:16px; color:var(--ink); background:var(--bg);
+    border:1px solid var(--line); border-radius:6px; padding:9px 10px;
+  }
+  textarea{ font-family:var(--mono); font-size:15px; min-height:140px; resize:vertical; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, summary:focus-visible{ outline:3px solid var(--accent); outline-offset:2px; }
+  .row{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  button{ font:inherit; font-weight:600; font-size:16px; cursor:pointer; border-radius:6px; padding:10px 16px; border:1px solid var(--line); background:var(--surface); color:var(--ink); }
+  button:hover:not(:disabled){ border-color:var(--ink-2); }
+  button:disabled{ opacity:.45; cursor:default; }
+  button.primary{ background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+
+  /* stepper */
+  .steps{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(6,1fr); gap:6px; position:relative; }
+  .steps li{ min-width:0; }
+  .stepbtn{ width:100%; display:flex; flex-direction:column; align-items:center; gap:6px; background:none; border:none; padding:4px 2px; font-size:14px; font-weight:600; color:var(--ink-2); }
+  .stepbtn .dot{ width:30px; height:30px; border-radius:50%; border:2px solid var(--line); background:var(--surface); display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:14px; transition:background .3s, border-color .3s, color .3s; }
+  .stepbtn[aria-current="step"] .dot{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  .stepbtn.done .dot{ border-color:var(--accent); color:var(--accent); }
+  .stepbtn[aria-current="step"]{ color:var(--ink); }
+  .bar{ height:6px; background:var(--line); border-radius:3px; overflow:hidden; }
+  .bar > i{ display:block; height:100%; background:var(--accent); width:0; transition:width .5s ease; }
+  .controls{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  .controls .sp{ flex:1; }
+
+  .stage{ display:grid; grid-template-columns:minmax(0,1.7fr) minmax(0,1fr); gap:20px; align-items:start; }
+  @media (max-width:860px){ .stage{ grid-template-columns:minmax(0,1fr); } }
+  .chartbox{ min-width:0; display:flex; flex-direction:column; gap:8px; }
+  .chartbox svg{ display:block; width:100%; height:auto; }
+  .panel{ display:flex; flex-direction:column; gap:12px; min-width:0; }
+  .panel .big{ font-family:var(--mono); font-size:clamp(22px,3.4vw,30px); background:var(--accent-soft); border-radius:8px; padding:10px 14px; overflow-x:auto; }
+  .panel table{ width:100%; border-collapse:collapse; font-size:16px; }
+  .panel td{ padding:6px 8px; border-bottom:1px solid var(--line); }
+  .panel td.v{ font-family:var(--mono); text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .panel.all{ gap:22px; }
+  .calc{ font-family:var(--mono); font-size:14.5px; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:12px 14px; overflow-x:auto; line-height:1.85; }
+  .verdict{ border-left:5px solid var(--accent); padding:10px 14px; background:var(--accent-soft); border-radius:0 8px 8px 0; font-size:17.5px; }
+  .verdict.no{ border-color:var(--ink-2); background:var(--bg); }
+  .caution{ border:2px solid var(--flag); border-radius:8px; padding:12px 14px; }
+  .caution b{ color:var(--flag); }
+  .legend{ display:flex; flex-wrap:wrap; gap:6px 18px; font-size:14px; color:var(--ink-2); }
+  .legend i{ display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:6px; vertical-align:-1px; }
+
+  .chart text{ fill:var(--ink-2); font-family:var(--sans); font-size:12px; }
+  .chart .ttl{ fill:var(--ink); font-family:var(--serif); font-size:16px; font-weight:700; }
+  .chart .axl{ fill:var(--ink); font-size:13px; font-weight:600; }
+  .chart .grid{ stroke:var(--line); stroke-width:1; }
+  .chart .axis{ stroke:var(--ink-2); stroke-width:1.2; }
+  .chart .reg{ stroke:var(--accent); stroke-width:2.8; fill:none; }
+  .chart .mean{ stroke:var(--ink-2); stroke-width:1.4; stroke-dasharray:5 4; }
+  .chart .pt{ fill:var(--pt); fill-opacity:.8; stroke:var(--surface); stroke-width:1.2; }
+  .chart .pt.dim{ fill:var(--pt-dim); }
+  .chart .hlpt{ fill:var(--hl); stroke:var(--surface); stroke-width:2; }
+  .chart .hlring{ fill:none; stroke:var(--hl); stroke-width:2.2; }
+  .chart .outring{ fill:none; stroke:var(--flag); stroke-width:2; stroke-dasharray:3 2; }
+  .chart .extxt, .chart .hltxt{ paint-order:stroke; stroke:var(--surface); stroke-width:3.5px; stroke-linejoin:round; }
+  .chart .hltxt{ fill:var(--hl); font-weight:700; font-size:13px; }
+  .chart .tc{ fill:none; stroke:var(--ink); stroke-width:1.8; }
+  .chart .tail{ fill:var(--accent); fill-opacity:.4; }
+  .chart .crit{ stroke:var(--ink-2); stroke-width:1.3; stroke-dasharray:4 3; }
+  .chart .tobs{ stroke:var(--hl); stroke-width:2.4; }
+  .chart .tobs-t{ fill:var(--hl); font-weight:700; }
+  @keyframes pop{ from{ opacity:0; transform:scale(.2); } to{ opacity:1; transform:scale(1); } }
+  @keyframes draw{ from{ stroke-dasharray:var(--len); stroke-dashoffset:var(--len); } to{ stroke-dasharray:var(--len); stroke-dashoffset:0; } }
+  @keyframes fadein{ from{ opacity:0; } to{ opacity:1; } }
+  .chart .pt.anim, .chart .hlpt.anim{ animation:pop .45s ease backwards; transform-box:fill-box; transform-origin:center; }
+  .chart .reg.anim{ animation:draw 1.1s ease-out; }
+  .chart .fade{ animation:fadein .7s ease backwards; }
+
+  .county-card{ display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr)); gap:12px; }
+  .stat{ background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .stat .k{ font-size:13px; color:var(--ink-2); text-transform:uppercase; letter-spacing:.06em; font-weight:600; }
+  .stat .v{ font-family:var(--mono); font-size:20px; font-weight:500; margin-top:2px; font-variant-numeric:tabular-nums; }
+  .defs{ display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr)); gap:10px 24px; margin-top:14px; font-size:15px; color:var(--ink-2); }
+  .defs p b{ color:var(--ink); }
+  .guess{ border-top:1px solid var(--line); padding-top:16px; display:flex; flex-direction:column; gap:10px; }
+  .guess .opts{ display:flex; flex-wrap:wrap; gap:10px; }
+  table.pv{ border-collapse:collapse; font-size:15px; min-width:260px; }
+  table.pv th, table.pv td{ border-bottom:1px solid var(--line); padding:5px 12px; text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  table.pv th{ font-family:var(--sans); font-weight:600; text-align:right; color:var(--ink-2); }
+  .chart .extxt{ fill:var(--ink-2); font-size:12px; font-weight:600; }
+  .chart .extpt{ fill:none; stroke:var(--ink-2); stroke-width:1.6; }
+  details{ border:1px solid var(--line); border-radius:8px; padding:10px 14px; }
+  summary{ cursor:pointer; font-weight:600; }
+  .src li{ margin-bottom:6px; }
+  .src ul{ margin:8px 0 0; padding-left:22px; max-width:78ch; }
+  @media (max-width:560px){
+    section{ padding:18px 14px; }
+    body{ font-size:16px; }
+    .stepbtn{ font-size:11.5px; }
+    .stepbtn .dot{ width:26px; height:26px; }
+  }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Statistics project: correlation and linear regression</div>
+    <h1>California County Health Explorer</h1>
+    <p class="sub">Discover how economic and living conditions relate to the health of the people who live there, across California's 58 counties.</p>
+  </header>
+
+  <section id="sec-choose" aria-labelledby="h-choose">
+    <h2 id="h-choose" class="sr">Data</h2>
+    <div class="tabs" role="tablist" aria-label="Data source">
+      <button class="tab" role="tab" id="tab-county" aria-selected="true" type="button">California counties</button>
+      <button class="tab" role="tab" id="tab-own" aria-selected="false" type="button">My own data</button>
+    </div>
+
+    <div id="mode-county">
+      <div class="grid3">
+        <div class="field"><label for="sel-x">X: economic or living condition</label><select id="sel-x"></select></div>
+        <div class="field"><label for="sel-y">Y: health outcome</label><select id="sel-y"></select></div>
+        <div class="field"><label for="sel-county">Your county</label><select id="sel-county"></select></div>
+      </div>
+      <div class="defs" id="defs" aria-live="polite"></div>
+      <div class="guess" id="guess" style="margin-top:18px">
+        <p class="lbl" id="guess-q"></p>
+        <div class="opts">
+          <button type="button" data-g="up">Rise together</button>
+          <button type="button" data-g="down">One rises, the other falls</button>
+          <button type="button" data-g="none">No connection</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="mode-own" hidden>
+      <div class="grid2">
+        <div class="field">
+          <label for="x-name">X: explanatory variable</label>
+          <div class="row" style="flex-wrap:nowrap"><input type="text" id="x-name" maxlength="60" placeholder="Name, e.g. Hours studied" style="flex:2"><input type="text" id="x-unit" maxlength="24" placeholder="Unit (optional)" style="flex:1" aria-label="X unit"></div>
+        </div>
+        <div class="field">
+          <label for="y-name">Y: response variable</label>
+          <div class="row" style="flex-wrap:nowrap"><input type="text" id="y-name" maxlength="60" placeholder="Name, e.g. Exam score" style="flex:2"><input type="text" id="y-unit" maxlength="24" placeholder="Unit (optional)" style="flex:1" aria-label="Y unit"></div>
+        </div>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label for="pairs">Paste two columns, X then Y, one pair per line</label>
+        <textarea id="pairs" spellcheck="false" placeholder="Copy two columns from Excel or Google Sheets and paste them here. A header row is optional."></textarea>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="btn-file" type="button" class="primary">Upload CSV</button>
+        <input type="file" id="file" accept=".csv,.txt,.tsv,text/csv,text/plain" hidden>
+        <button id="btn-example" type="button">Load example</button>
+        <button id="btn-clear" type="button">Clear</button>
+      </div>
+      <div id="csv-pick" class="grid2" style="margin-top:12px" hidden>
+        <div class="field"><label for="csv-x">CSV column for X</label><select id="csv-x"></select></div>
+        <div class="field"><label for="csv-y">CSV column for Y</label><select id="csv-y"></select></div>
+      </div>
+      <div id="preview" style="margin-top:16px;display:flex;flex-direction:column;gap:10px" hidden>
+        <p class="lbl" id="pv-title"></p>
+        <div style="overflow-x:auto"><table class="pv"><thead><tr><th id="pv-xh"></th><th id="pv-yh"></th></tr></thead><tbody id="pv-body"></tbody></table></div>
+        <div class="row"><button class="primary" id="btn-analyze" type="button">Analyze</button><button id="btn-swap" type="button">Swap X and Y</button></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field" style="flex:0 0 auto">
+        <label for="alpha">Significance level (α)</label>
+        <select id="alpha"><option value="0.01">0.01</option><option value="0.05" selected>0.05</option><option value="0.10">0.10</option></select>
+      </div>
+    </div>
+    <div id="msgs" role="alert" aria-live="polite"></div>
+  </section>
+
+  <section id="sec-steps" aria-labelledby="h-steps" hidden>
+    <h2 id="h-steps" class="sr">Analysis</h2>
+    <ol class="steps" id="steps"></ol>
+    <div class="bar" aria-hidden="true"><i id="barfill"></i></div>
+    <div class="controls">
+      <button id="btn-back" type="button">Back</button>
+      <button id="btn-next" class="primary" type="button">Next</button>
+      <button id="btn-play" type="button">Play</button>
+      <span class="hint" id="playnote" aria-live="polite"></span>
+      <span class="sp"></span>
+      <button id="btn-all" type="button" aria-pressed="false">Show everything</button>
+    </div>
+    <div class="stage">
+      <div class="chartbox"><div id="scatter" class="chart"></div>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="panel" id="panel" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section id="sec-use" aria-labelledby="h-use" hidden>
+    <h2 id="h-use" class="sr">Results</h2>
+    <div id="county-wrap">
+      <h3 id="county-h"></h3>
+      <div class="county-card" id="county-card" style="margin-top:12px"></div>
+      <p id="county-text" style="margin-top:12px;max-width:72ch"></p>
+    </div>
+  </section>
+
+  <details class="src" id="sec-about">
+    <summary>Data source and method</summary>
+    <ul>
+      <li><b>Data.</b> County Health Rankings &amp; Roadmaps, 2025 California file (University of Wisconsin Population Health Institute). Each measure comes from its own public source; the data years run from 2019 to 2024. Values are used as published; counties missing a value are left out of that analysis.</li>
+      <li><b>Each dot</b> is a county average, not a person. Counties under 20,000 residents have less reliable estimates, and every county counts equally.</li>
+      <li><b>Test.</b> H₀: ρ = 0 vs. Hₐ: ρ ≠ 0, two-tailed. t = r√((n − 2)/(1 − r²)), df = n − 2, exact p-value from the t distribution. Same t and p as testing the slope.</li>
+      <li><b>Strength</b> (rule of thumb): |r| under 0.10 none, under 0.40 weak, under 0.70 moderate, otherwise strong.</li>
+      <li>Trying many pairs will turn up some significant results by chance alone.</li>
+    </ul>
+  </details>
+</div>
+
+<script>
+(function(){
+'use strict';
+const CA = {"measures":[["income","Median household income","dollars","X","A",266,0],["poverty","Children in poverty","% of children","X","S",185,1],["unemp","Unemployment","% of labor force","X","S",179,1],["ineq","Income inequality (80th/20th percentile income ratio)","ratio","X","S",183,2],["uninsured","Uninsured (under age 65)","% of people","X","S",113,1],["housing","Severe housing cost burden","% of households","X","A",233,1],["foodins","Food insecurity","% of people","X","A",148,1],["childcare","Child care cost burden","% of median income","X","S",223,1],["college","Some college (ages 25-44)","% of adults","X","S",167,1],["broadband","Broadband access","% of households","X","S",158,1],["lifeexp","Life expectancy","years","Y","A",3,1],["ypll","Premature death (years of life lost before 75)","years per 100,000 people","Y","S",5,0],["diabetes","Adults with diabetes","% of adults","Y","A",105,1],["obesity","Adult obesity","% of adults","Y","A",110,1],["fairpoor","Fair or poor health","% of adults","Y","S",71,1],["physdays","Poor physical health days","days per 30","Y","S",37,2],["mentdays","Poor mental health days","days per 30","Y","S",67,2],["inactive","Physical inactivity","% of adults","Y","A",214,1],["smoking","Adult smoking","% of adults","Y","A",211,1],["prevhosp","Preventable hospital stays","per 100,000 Medicare enrollees","Y","S",98,0]],"rows":[{"fips":"06001","county":"Alameda","pop":1622188,"income":119230.0,"poverty":9.0,"unemp":4.1,"ineq":null,"uninsured":4.5,"housing":16.5,"foodins":9.6,"childcare":37.3,"college":78.7,"broadband":93.5,"lifeexp":82.0,"ypll":5217.0,"diabetes":9.2,"obesity":19.4,"fairpoor":15.1,"physdays":3.84,"mentdays":5.33,"inactive":18.8,"smoking":10.1,"prevhosp":2102.0},{"fips":"06003","county":"Alpine","pop":1141,"income":83265.0,"poverty":26.8,"unemp":6.5,"ineq":4.2,"uninsured":6.0,"housing":9.0,"foodins":12.3,"childcare":24.2,"college":65.1,"broadband":86.9,"lifeexp":null,"ypll":null,"diabetes":8.8,"obesity":29.9,"fairpoor":15.4,"physdays":4.41,"mentdays":5.86,"inactive":18.1,"smoking":13.4,"prevhosp":968.0},{"fips":"06005","county":"Amador","pop":41811,"income":80767.0,"poverty":13.9,"unemp":5.1,"ineq":4.08,"uninsured":5.7,"housing":15.8,"foodins":11.1,"childcare":23.4,"college":62.9,"broadband":87.9,"lifeexp":78.5,"ypll":7567.0,"diabetes":9.0,"obesity":27.3,"fairpoor":16.3,"physdays":4.39,"mentdays":5.7,"inactive":18.9,"smoking":13.3,"prevhosp":1811.0},{"fips":"06007","county":"Butte","pop":207172,"income":63084.0,"poverty":20.8,"unemp":5.2,"ineq":5.36,"uninsured":7.6,"housing":17.0,"foodins":14.6,"childcare":35.7,"college":71.2,"broadband":90.7,"lifeexp":75.7,"ypll":9316.0,"diabetes":9.8,"obesity":31.5,"fairpoor":18.2,"physdays":4.89,"mentdays":6.18,"inactive":22.5,"smoking":14.2,"prevhosp":3342.0},{"fips":"06009","county":"Calaveras","pop":46565,"income":77041.0,"poverty":15.5,"unemp":4.2,"ineq":4.67,"uninsured":6.9,"housing":18.2,"foodins":13.1,"childcare":26.5,"college":59.7,"broadband":85.6,"lifeexp":78.8,"ypll":7926.0,"diabetes":9.4,"obesity":29.4,"fairpoor":17.4,"physdays":4.77,"mentdays":6.01,"inactive":20.1,"smoking":14.8,"prevhosp":1876.0},{"fips":"06011","county":"Colusa","pop":22037,"income":66675.0,"poverty":14.2,"unemp":13.0,"ineq":4.93,"uninsured":9.8,"housing":11.7,"foodins":15.6,"childcare":28.8,"college":51.3,"broadband":82.9,"lifeexp":79.2,"ypll":6184.0,"diabetes":11.7,"obesity":32.2,"fairpoor":24.0,"physdays":5.23,"mentdays":5.98,"inactive":27.2,"smoking":14.7,"prevhosp":3088.0},{"fips":"06013","county":"Contra Costa","pop":1155025,"income":122000.0,"poverty":10.1,"unemp":4.1,"ineq":4.69,"uninsured":5.2,"housing":15.9,"foodins":9.2,"childcare":33.9,"college":71.8,"broadband":95.3,"lifeexp":81.2,"ypll":5577.0,"diabetes":9.6,"obesity":28.4,"fairpoor":15.5,"physdays":3.95,"mentdays":5.15,"inactive":18.6,"smoking":10.5,"prevhosp":2152.0},{"fips":"06015","county":"Del Norte","pop":26589,"income":70231.0,"poverty":21.0,"unemp":5.7,"ineq":5.02,"uninsured":8.0,"housing":14.1,"foodins":14.6,"childcare":26.5,"college":57.1,"broadband":90.3,"lifeexp":73.8,"ypll":11533.0,"diabetes":11.2,"obesity":33.8,"fairpoor":24.4,"physdays":5.13,"mentdays":6.18,"inactive":26.5,"smoking":19.2,"prevhosp":2001.0},{"fips":"06017","county":"El Dorado","pop":192215,"income":107063.0,"poverty":7.8,"unemp":4.0,"ineq":4.77,"uninsured":5.2,"housing":15.4,"foodins":9.9,"childcare":27.6,"college":72.7,"broadband":92.4,"lifeexp":80.6,"ypll":6327.0,"diabetes":7.8,"obesity":24.8,"fairpoor":13.2,"physdays":3.78,"mentdays":5.22,"inactive":15.2,"smoking":10.6,"prevhosp":2043.0},{"fips":"06019","county":"Fresno","pop":1017162,"income":71271.0,"poverty":23.3,"unemp":7.5,"ineq":5.13,"uninsured":7.7,"housing":17.7,"foodins":16.2,"childcare":36.2,"college":58.2,"broadband":87.2,"lifeexp":75.9,"ypll":9008.0,"diabetes":13.0,"obesity":39.0,"fairpoor":24.3,"physdays":5.04,"mentdays":6.0,"inactive":26.1,"smoking":14.2,"prevhosp":3188.0},{"fips":"06021","county":"Glenn","pop":28129,"income":64197.0,"poverty":15.1,"unemp":6.3,"ineq":3.93,"uninsured":9.2,"housing":19.3,"foodins":14.1,"childcare":29.5,"college":50.9,"broadband":90.5,"lifeexp":75.4,"ypll":9723.0,"diabetes":11.2,"obesity":34.1,"fairpoor":23.3,"physdays":5.16,"mentdays":6.15,"inactive":26.5,"smoking":15.6,"prevhosp":4032.0},{"fips":"06023","county":"Humboldt","pop":133985,"income":61307.0,"poverty":18.5,"unemp":4.6,"ineq":5.18,"uninsured":7.0,"housing":20.4,"foodins":15.8,"childcare":39.4,"college":69.1,"broadband":90.5,"lifeexp":75.8,"ypll":9668.0,"diabetes":9.6,"obesity":33.1,"fairpoor":19.6,"physdays":4.9,"mentdays":6.32,"inactive":21.7,"smoking":17.3,"prevhosp":2054.0},{"fips":"06025","county":"Imperial","pop":179057,"income":58768.0,"poverty":22.1,"unemp":17.3,"ineq":5.47,"uninsured":8.6,"housing":17.2,"foodins":21.0,"childcare":32.7,"college":56.2,"broadband":88.2,"lifeexp":76.2,"ypll":8703.0,"diabetes":15.1,"obesity":38.5,"fairpoor":29.0,"physdays":5.7,"mentdays":5.89,"inactive":32.3,"smoking":14.0,"prevhosp":2399.0},{"fips":"06027","county":"Inyo","pop":18527,"income":71656.0,"poverty":14.2,"unemp":3.8,"ineq":4.8,"uninsured":7.3,"housing":13.9,"foodins":12.9,"childcare":30.9,"college":68.3,"broadband":82.7,"lifeexp":76.6,"ypll":10431.0,"diabetes":9.3,"obesity":29.9,"fairpoor":16.8,"physdays":4.58,"mentdays":5.75,"inactive":19.7,"smoking":13.8,"prevhosp":1198.0},{"fips":"06029","county":"Kern","pop":913820,"income":68436.0,"poverty":24.8,"unemp":8.3,"ineq":4.87,"uninsured":7.7,"housing":16.2,"foodins":15.9,"childcare":31.4,"college":51.9,"broadband":89.8,"lifeexp":74.2,"ypll":10697.0,"diabetes":13.0,"obesity":35.9,"fairpoor":25.5,"physdays":5.03,"mentdays":5.73,"inactive":30.8,"smoking":16.6,"prevhosp":2749.0},{"fips":"06031","county":"Kings","pop":152682,"income":65768.0,"poverty":20.3,"unemp":8.2,"ineq":4.09,"uninsured":7.3,"housing":13.0,"foodins":15.1,"childcare":29.2,"college":49.5,"broadband":87.8,"lifeexp":76.6,"ypll":8188.0,"diabetes":13.0,"obesity":31.9,"fairpoor":26.2,"physdays":5.18,"mentdays":5.99,"inactive":29.8,"smoking":16.3,"prevhosp":2461.0},{"fips":"06033","county":"Lake","pop":67878,"income":57945.0,"poverty":21.6,"unemp":5.8,"ineq":5.37,"uninsured":7.5,"housing":16.3,"foodins":15.4,"childcare":35.3,"college":56.1,"broadband":85.0,"lifeexp":74.1,"ypll":12237.0,"diabetes":9.7,"obesity":30.7,"fairpoor":19.2,"physdays":5.01,"mentdays":6.12,"inactive":22.3,"smoking":14.1,"prevhosp":2038.0},{"fips":"06035","county":"Lassen","pop":28861,"income":77743.0,"poverty":17.2,"unemp":5.2,"ineq":4.41,"uninsured":6.0,"housing":11.8,"foodins":13.7,"childcare":24.0,"college":42.6,"broadband":87.2,"lifeexp":74.9,"ypll":11258.0,"diabetes":10.5,"obesity":32.8,"fairpoor":21.3,"physdays":5.07,"mentdays":6.16,"inactive":23.7,"smoking":16.9,"prevhosp":2997.0},{"fips":"06037","county":"Los Angeles","pop":9663345,"income":86499.0,"poverty":17.6,"unemp":5.0,"ineq":5.34,"uninsured":9.4,"housing":22.7,"foodins":13.2,"childcare":29.4,"college":67.1,"broadband":91.7,"lifeexp":79.4,"ypll":6746.0,"diabetes":11.4,"obesity":26.2,"fairpoor":19.0,"physdays":4.61,"mentdays":5.57,"inactive":22.6,"smoking":10.6,"prevhosp":2572.0},{"fips":"06039","county":"Madera","pop":162858,"income":66084.0,"poverty":24.2,"unemp":7.5,"ineq":4.67,"uninsured":9.6,"housing":16.2,"foodins":15.8,"childcare":29.7,"college":50.8,"broadband":90.1,"lifeexp":76.5,"ypll":8648.0,"diabetes":12.7,"obesity":35.2,"fairpoor":24.9,"physdays":5.59,"mentdays":6.24,"inactive":28.6,"smoking":15.2,"prevhosp":2666.0},{"fips":"06041","county":"Marin","pop":254407,"income":139197.0,"poverty":8.1,"unemp":3.3,"ineq":null,"uninsured":5.1,"housing":17.7,"foodins":8.7,"childcare":33.9,"college":77.3,"broadband":95.1,"lifeexp":84.3,"ypll":4149.0,"diabetes":7.3,"obesity":23.5,"fairpoor":10.6,"physdays":3.8,"mentdays":5.03,"inactive":12.8,"smoking":7.5,"prevhosp":1404.0},{"fips":"06043","county":"Mariposa","pop":16919,"income":64352.0,"poverty":21.9,"unemp":5.1,"ineq":5.06,"uninsured":6.7,"housing":17.0,"foodins":14.3,"childcare":29.8,"college":75.8,"broadband":84.2,"lifeexp":78.3,"ypll":9759.0,"diabetes":9.8,"obesity":32.3,"fairpoor":19.9,"physdays":4.64,"mentdays":5.98,"inactive":22.1,"smoking":16.9,"prevhosp":2415.0},{"fips":"06045","county":"Mendocino","pop":89108,"income":65891.0,"poverty":18.8,"unemp":4.7,"ineq":5.08,"uninsured":10.3,"housing":18.4,"foodins":15.1,"childcare":32.1,"college":56.6,"broadband":87.0,"lifeexp":76.8,"ypll":10093.0,"diabetes":9.8,"obesity":29.4,"fairpoor":19.6,"physdays":4.84,"mentdays":6.24,"inactive":21.6,"smoking":14.5,"prevhosp":1842.0},{"fips":"06047","county":"Merced","pop":291920,"income":58962.0,"poverty":22.7,"unemp":9.0,"ineq":4.63,"uninsured":8.6,"housing":15.6,"foodins":16.6,"childcare":35.2,"college":47.9,"broadband":88.1,"lifeexp":76.2,"ypll":8849.0,"diabetes":13.6,"obesity":34.5,"fairpoor":29.0,"physdays":5.38,"mentdays":5.92,"inactive":31.1,"smoking":18.0,"prevhosp":3577.0},{"fips":"06049","county":"Modoc","pop":8500,"income":51996.0,"poverty":28.2,"unemp":6.3,"ineq":3.89,"uninsured":8.0,"housing":10.4,"foodins":15.1,"childcare":35.8,"college":55.5,"broadband":82.7,"lifeexp":74.6,"ypll":13302.0,"diabetes":9.7,"obesity":30.0,"fairpoor":18.4,"physdays":4.94,"mentdays":6.16,"inactive":21.5,"smoking":14.1,"prevhosp":2124.0},{"fips":"06051","county":"Mono","pop":13066,"income":82973.0,"poverty":10.7,"unemp":3.8,"ineq":3.63,"uninsured":10.3,"housing":8.5,"foodins":10.3,"childcare":36.0,"college":78.4,"broadband":91.1,"lifeexp":93.6,"ypll":4739.0,"diabetes":8.9,"obesity":29.1,"fairpoor":16.4,"physdays":4.31,"mentdays":5.67,"inactive":19.1,"smoking":12.6,"prevhosp":1575.0},{"fips":"06053","county":"Monterey","pop":430723,"income":86809.0,"poverty":20.4,"unemp":7.0,"ineq":4.25,"uninsured":11.6,"housing":18.5,"foodins":13.0,"childcare":29.5,"college":51.3,"broadband":93.1,"lifeexp":80.8,"ypll":6114.0,"diabetes":11.1,"obesity":32.8,"fairpoor":22.8,"physdays":4.87,"mentdays":5.81,"inactive":25.5,"smoking":13.9,"prevhosp":2379.0},{"fips":"06055","county":"Napa","pop":133216,"income":100469.0,"poverty":9.3,"unemp":3.5,"ineq":4.56,"uninsured":7.4,"housing":16.9,"foodins":10.0,"childcare":28.5,"college":67.2,"broadband":93.0,"lifeexp":81.2,"ypll":5210.0,"diabetes":9.6,"obesity":28.7,"fairpoor":18.5,"physdays":4.13,"mentdays":5.31,"inactive":22.8,"smoking":12.9,"prevhosp":1762.0},{"fips":"06057","county":"Nevada","pop":102037,"income":87142.0,"poverty":12.8,"unemp":3.9,"ineq":5.34,"uninsured":6.2,"housing":19.4,"foodins":11.1,"childcare":27.1,"college":72.0,"broadband":91.8,"lifeexp":80.0,"ypll":7472.0,"diabetes":8.9,"obesity":29.9,"fairpoor":17.0,"physdays":4.2,"mentdays":5.71,"inactive":21.3,"smoking":15.8,"prevhosp":1634.0},{"fips":"06059","county":"Orange","pop":3135755,"income":109768.0,"poverty":11.0,"unemp":3.6,"ineq":4.71,"uninsured":7.3,"housing":19.1,"foodins":10.4,"childcare":27.8,"college":73.9,"broadband":94.4,"lifeexp":81.3,"ypll":5325.0,"diabetes":9.9,"obesity":25.7,"fairpoor":16.2,"physdays":3.99,"mentdays":4.89,"inactive":20.3,"smoking":10.9,"prevhosp":1723.0},{"fips":"06061","county":"Placer","pop":423561,"income":110020.0,"poverty":6.1,"unemp":3.7,"ineq":4.55,"uninsured":3.7,"housing":14.2,"foodins":8.9,"childcare":27.4,"college":79.9,"broadband":93.6,"lifeexp":81.2,"ypll":5086.0,"diabetes":8.6,"obesity":25.8,"fairpoor":13.6,"physdays":4.03,"mentdays":5.53,"inactive":16.5,"smoking":11.5,"prevhosp":1698.0},{"fips":"06063","county":"Plumas","pop":19131,"income":64121.0,"poverty":18.2,"unemp":7.3,"ineq":3.96,"uninsured":6.2,"housing":13.3,"foodins":13.3,"childcare":29.1,"college":71.3,"broadband":83.5,"lifeexp":78.2,"ypll":8792.0,"diabetes":8.5,"obesity":29.1,"fairpoor":15.4,"physdays":4.49,"mentdays":6.0,"inactive":19.3,"smoking":13.3,"prevhosp":1798.0},{"fips":"06065","county":"Riverside","pop":2492442,"income":90251.0,"poverty":14.1,"unemp":4.8,"ineq":4.42,"uninsured":8.3,"housing":18.2,"foodins":11.1,"childcare":27.0,"college":58.5,"broadband":92.7,"lifeexp":77.8,"ypll":7817.0,"diabetes":10.5,"obesity":34.0,"fairpoor":18.2,"physdays":4.73,"mentdays":5.19,"inactive":23.9,"smoking":11.5,"prevhosp":2355.0},{"fips":"06067","county":"Sacramento","pop":1584288,"income":89984.0,"poverty":13.7,"unemp":4.4,"ineq":4.53,"uninsured":5.4,"housing":16.6,"foodins":11.8,"childcare":30.5,"college":68.2,"broadband":93.3,"lifeexp":78.0,"ypll":7616.0,"diabetes":10.6,"obesity":33.9,"fairpoor":19.0,"physdays":4.38,"mentdays":5.75,"inactive":22.7,"smoking":13.0,"prevhosp":2696.0},{"fips":"06069","county":"San Benito","pop":68175,"income":105112.0,"poverty":10.8,"unemp":6.0,"ineq":3.74,"uninsured":6.8,"housing":15.1,"foodins":10.6,"childcare":26.3,"college":58.1,"broadband":94.3,"lifeexp":79.9,"ypll":6316.0,"diabetes":10.4,"obesity":29.1,"fairpoor":18.4,"physdays":4.56,"mentdays":5.5,"inactive":22.8,"smoking":11.3,"prevhosp":2367.0},{"fips":"06071","county":"San Bernardino","pop":2195611,"income":84576.0,"poverty":17.4,"unemp":4.7,"ineq":4.39,"uninsured":8.7,"housing":17.7,"foodins":12.2,"childcare":26.6,"college":57.1,"broadband":92.1,"lifeexp":75.4,"ypll":9378.0,"diabetes":12.4,"obesity":35.1,"fairpoor":21.8,"physdays":4.8,"mentdays":5.34,"inactive":26.9,"smoking":12.6,"prevhosp":2823.0},{"fips":"06073","county":"San Diego","pop":3269973,"income":103476.0,"poverty":11.6,"unemp":3.9,"ineq":4.63,"uninsured":7.3,"housing":19.6,"foodins":10.9,"childcare":28.2,"college":74.7,"broadband":94.2,"lifeexp":80.3,"ypll":5727.0,"diabetes":9.4,"obesity":25.4,"fairpoor":16.4,"physdays":4.21,"mentdays":5.18,"inactive":18.3,"smoking":10.2,"prevhosp":2105.0},{"fips":"06075","county":"San Francisco","pop":808988,"income":125456.0,"poverty":10.8,"unemp":3.3,"ineq":null,"uninsured":4.2,"housing":15.6,"foodins":11.2,"childcare":41.4,"college":88.5,"broadband":92.3,"lifeexp":82.4,"ypll":5634.0,"diabetes":9.2,"obesity":17.7,"fairpoor":12.7,"physdays":3.57,"mentdays":4.98,"inactive":16.4,"smoking":8.8,"prevhosp":1976.0},{"fips":"06077","county":"San Joaquin","pop":800965,"income":86211.0,"poverty":16.2,"unemp":6.2,"ineq":4.48,"uninsured":7.6,"housing":16.7,"foodins":12.7,"childcare":27.9,"college":54.0,"broadband":91.3,"lifeexp":76.4,"ypll":8730.0,"diabetes":11.6,"obesity":33.8,"fairpoor":20.3,"physdays":4.76,"mentdays":5.33,"inactive":24.0,"smoking":12.5,"prevhosp":2481.0},{"fips":"06079","county":"San Luis Obispo","pop":281639,"income":89809.0,"poverty":11.8,"unemp":3.5,"ineq":4.65,"uninsured":7.2,"housing":18.5,"foodins":10.7,"childcare":32.0,"college":71.5,"broadband":92.4,"lifeexp":80.7,"ypll":6206.0,"diabetes":8.4,"obesity":28.2,"fairpoor":15.1,"physdays":4.16,"mentdays":5.61,"inactive":17.4,"smoking":11.2,"prevhosp":1557.0},{"fips":"06081","county":"San Mateo","pop":726353,"income":151004.0,"poverty":7.1,"unemp":3.0,"ineq":null,"uninsured":4.6,"housing":17.5,"foodins":8.5,"childcare":31.5,"college":80.1,"broadband":95.2,"lifeexp":84.1,"ypll":4006.0,"diabetes":8.9,"obesity":21.4,"fairpoor":13.2,"physdays":3.56,"mentdays":4.6,"inactive":17.2,"smoking":8.8,"prevhosp":1434.0},{"fips":"06083","county":"Santa Barbara","pop":441257,"income":90155.0,"poverty":17.0,"unemp":4.1,"ineq":4.81,"uninsured":9.2,"housing":19.1,"foodins":11.8,"childcare":34.9,"college":65.0,"broadband":92.1,"lifeexp":80.6,"ypll":6123.0,"diabetes":10.0,"obesity":31.6,"fairpoor":16.7,"physdays":4.45,"mentdays":5.71,"inactive":20.5,"smoking":9.5,"prevhosp":1454.0},{"fips":"06085","county":"Santa Clara","pop":1877592,"income":154573.0,"poverty":7.4,"unemp":3.5,"ineq":null,"uninsured":4.1,"housing":15.1,"foodins":8.8,"childcare":28.9,"college":81.7,"broadband":95.1,"lifeexp":83.8,"ypll":4125.0,"diabetes":10.0,"obesity":22.0,"fairpoor":14.8,"physdays":3.42,"mentdays":4.5,"inactive":19.1,"smoking":8.8,"prevhosp":1952.0},{"fips":"06087","county":"Santa Cruz","pop":261547,"income":102723.0,"poverty":14.0,"unemp":5.7,"ineq":5.19,"uninsured":6.5,"housing":19.2,"foodins":11.6,"childcare":32.3,"college":73.9,"broadband":93.5,"lifeexp":81.8,"ypll":5482.0,"diabetes":9.0,"obesity":29.4,"fairpoor":16.6,"physdays":4.17,"mentdays":5.65,"inactive":20.6,"smoking":11.5,"prevhosp":1617.0},{"fips":"06089","county":"Shasta","pop":180366,"income":71935.0,"poverty":16.0,"unemp":5.1,"ineq":4.92,"uninsured":7.5,"housing":16.7,"foodins":13.9,"childcare":31.4,"college":66.1,"broadband":89.5,"lifeexp":74.3,"ypll":10558.0,"diabetes":9.3,"obesity":28.7,"fairpoor":16.1,"physdays":4.58,"mentdays":6.1,"inactive":19.2,"smoking":13.7,"prevhosp":1984.0},{"fips":"06091","county":"Sierra","pop":3200,"income":67675.0,"poverty":14.8,"unemp":4.7,"ineq":6.56,"uninsured":6.3,"housing":17.5,"foodins":12.6,"childcare":27.5,"college":22.7,"broadband":74.0,"lifeexp":81.3,"ypll":null,"diabetes":9.0,"obesity":31.3,"fairpoor":17.3,"physdays":4.54,"mentdays":5.94,"inactive":21.0,"smoking":15.1,"prevhosp":2384.0},{"fips":"06093","county":"Siskiyou","pop":42905,"income":58975.0,"poverty":21.6,"unemp":6.4,"ineq":5.08,"uninsured":8.2,"housing":14.4,"foodins":15.5,"childcare":41.1,"college":63.7,"broadband":86.3,"lifeexp":73.1,"ypll":13488.0,"diabetes":9.7,"obesity":32.9,"fairpoor":18.8,"physdays":4.96,"mentdays":6.35,"inactive":21.6,"smoking":15.9,"prevhosp":1513.0},{"fips":"06095","county":"Solano","pop":449218,"income":99117.0,"poverty":11.8,"unemp":4.7,"ineq":4.1,"uninsured":5.6,"housing":15.8,"foodins":10.0,"childcare":27.9,"college":63.4,"broadband":93.1,"lifeexp":78.8,"ypll":7385.0,"diabetes":11.0,"obesity":32.8,"fairpoor":17.7,"physdays":4.15,"mentdays":5.41,"inactive":21.8,"smoking":13.2,"prevhosp":2110.0},{"fips":"06097","county":"Sonoma","pop":481812,"income":100157.0,"poverty":9.5,"unemp":3.6,"ineq":4.28,"uninsured":6.7,"housing":17.4,"foodins":10.5,"childcare":23.0,"college":67.0,"broadband":94.0,"lifeexp":80.6,"ypll":5997.0,"diabetes":8.3,"obesity":28.3,"fairpoor":14.4,"physdays":4.29,"mentdays":5.83,"inactive":17.4,"smoking":10.5,"prevhosp":1869.0},{"fips":"06099","county":"Stanislaus","pop":551430,"income":81582.0,"poverty":15.9,"unemp":6.4,"ineq":4.25,"uninsured":7.1,"housing":16.8,"foodins":13.6,"childcare":27.2,"college":55.1,"broadband":91.0,"lifeexp":75.4,"ypll":9309.0,"diabetes":10.9,"obesity":34.7,"fairpoor":19.6,"physdays":4.94,"mentdays":5.85,"inactive":25.5,"smoking":12.8,"prevhosp":2918.0},{"fips":"06101","county":"Sutter","pop":97948,"income":71968.0,"poverty":19.2,"unemp":7.8,"ineq":4.35,"uninsured":8.8,"housing":13.6,"foodins":14.3,"childcare":33.9,"college":56.9,"broadband":88.5,"lifeexp":77.3,"ypll":8213.0,"diabetes":11.6,"obesity":32.0,"fairpoor":23.0,"physdays":4.82,"mentdays":5.8,"inactive":27.0,"smoking":16.4,"prevhosp":2997.0},{"fips":"06103","county":"Tehama","pop":64896,"income":58333.0,"poverty":20.7,"unemp":5.8,"ineq":4.53,"uninsured":7.2,"housing":16.9,"foodins":15.2,"childcare":32.4,"college":58.3,"broadband":86.1,"lifeexp":74.3,"ypll":11336.0,"diabetes":10.0,"obesity":32.5,"fairpoor":20.9,"physdays":5.01,"mentdays":6.3,"inactive":24.9,"smoking":16.7,"prevhosp":2198.0},{"fips":"06105","county":"Trinity","pop":15670,"income":52079.0,"poverty":29.5,"unemp":5.7,"ineq":4.76,"uninsured":6.0,"housing":13.2,"foodins":16.1,"childcare":35.8,"college":52.3,"broadband":79.2,"lifeexp":77.0,"ypll":12354.0,"diabetes":9.9,"obesity":32.4,"fairpoor":19.5,"physdays":5.18,"mentdays":6.46,"inactive":22.9,"smoking":17.1,"prevhosp":1885.0},{"fips":"06107","county":"Tulare","pop":479468,"income":71368.0,"poverty":23.2,"unemp":10.0,"ineq":4.26,"uninsured":9.2,"housing":16.6,"foodins":16.6,"childcare":27.9,"college":51.7,"broadband":87.8,"lifeexp":75.5,"ypll":9206.0,"diabetes":13.2,"obesity":38.0,"fairpoor":26.2,"physdays":5.15,"mentdays":5.62,"inactive":30.9,"smoking":15.4,"prevhosp":2548.0},{"fips":"06109","county":"Tuolumne","pop":54204,"income":72329.0,"poverty":13.6,"unemp":5.0,"ineq":4.26,"uninsured":5.7,"housing":15.1,"foodins":13.4,"childcare":29.1,"college":65.6,"broadband":88.2,"lifeexp":76.4,"ypll":9372.0,"diabetes":8.9,"obesity":31.0,"fairpoor":15.8,"physdays":4.53,"mentdays":5.76,"inactive":19.2,"smoking":13.4,"prevhosp":2020.0},{"fips":"06111","county":"Ventura","pop":829590,"income":106526.0,"poverty":12.8,"unemp":4.3,"ineq":4.38,"uninsured":8.5,"housing":17.8,"foodins":10.5,"childcare":30.6,"college":66.1,"broadband":93.1,"lifeexp":80.7,"ypll":5626.0,"diabetes":10.1,"obesity":28.9,"fairpoor":17.6,"physdays":4.39,"mentdays":5.59,"inactive":21.0,"smoking":10.7,"prevhosp":2101.0},{"fips":"06113","county":"Yolo","pop":220544,"income":91192.0,"poverty":11.6,"unemp":4.7,"ineq":5.91,"uninsured":5.6,"housing":18.2,"foodins":12.3,"childcare":36.1,"college":74.2,"broadband":91.7,"lifeexp":79.9,"ypll":5728.0,"diabetes":10.7,"obesity":28.5,"fairpoor":19.4,"physdays":4.37,"mentdays":5.77,"inactive":24.5,"smoking":12.8,"prevhosp":1975.0},{"fips":"06115","county":"Yuba","pop":85722,"income":71493.0,"poverty":20.0,"unemp":6.7,"ineq":4.74,"uninsured":6.6,"housing":15.1,"foodins":14.5,"childcare":31.7,"college":62.2,"broadband":91.5,"lifeexp":75.1,"ypll":9988.0,"diabetes":10.9,"obesity":32.6,"fairpoor":21.3,"physdays":5.18,"mentdays":6.35,"inactive":25.0,"smoking":15.6,"prevhosp":3550.0}]};
+
+/* ---------- exact t-distribution functions ---------- */
+function lgamma(z){
+  const c=[0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+  if(z<0.5) return Math.log(Math.PI/Math.sin(Math.PI*z))-lgamma(1-z);
+  z-=1; let x=c[0]; for(let i=1;i<9;i++) x+=c[i]/(z+i);
+  const t=z+7.5;
+  return 0.5*Math.log(2*Math.PI)+(z+0.5)*Math.log(t)-t+Math.log(x);
+}
+function betacf(a,b,x){
+  const FP=1e-300, EPS=3e-16, qab=a+b, qap=a+1, qam=a-1;
+  let c=1, d=1-qab*x/qap; if(Math.abs(d)<FP) d=FP; d=1/d; let h=d;
+  for(let m=1;m<=500;m++){
+    const m2=2*m;
+    let aa=m*(b-m)*x/((qam+m2)*(a+m2));
+    d=1+aa*d; if(Math.abs(d)<FP) d=FP; c=1+aa/c; if(Math.abs(c)<FP) c=FP; d=1/d; h*=d*c;
+    aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2));
+    d=1+aa*d; if(Math.abs(d)<FP) d=FP; c=1+aa/c; if(Math.abs(c)<FP) c=FP; d=1/d;
+    const del=d*c; h*=del; if(Math.abs(del-1)<EPS) break;
+  }
+  return h;
+}
+function ibeta(x,a,b){
+  if(x<=0) return 0; if(x>=1) return 1;
+  const bt=Math.exp(lgamma(a+b)-lgamma(a)-lgamma(b)+a*Math.log(x)+b*Math.log(1-x));
+  return x<(a+1)/(a+b+2) ? bt*betacf(a,b,x)/a : 1-bt*betacf(b,a,1-x)/b;
+}
+function tTwoTailedP(t,df){ if(!isFinite(t)) return 0; return ibeta(df/(df+t*t), df/2, 0.5); }
+function tCrit(alpha,df){ let lo=0, hi=1e7; for(let i=0;i<200;i++){ const mid=(lo+hi)/2; if(tTwoTailedP(mid,df)>alpha) lo=mid; else hi=mid; } return (lo+hi)/2; }
+function tPdf(t,df){ return Math.exp(lgamma((df+1)/2)-lgamma(df/2))/Math.sqrt(df*Math.PI)*Math.pow(1+t*t/df,-(df+1)/2); }
+
+/* ---------- regression / correlation ---------- */
+function analyze(xs,ys,alpha){
+  const n=xs.length;
+  let sx=0, sy=0; for(let i=0;i<n;i++){ sx+=xs[i]; sy+=ys[i]; }
+  const mx=sx/n, my=sy/n;
+  let sxx=0, syy=0, sxy=0;
+  for(let i=0;i<n;i++){ const dx=xs[i]-mx, dy=ys[i]-my; sxx+=dx*dx; syy+=dy*dy; sxy+=dx*dy; }
+  let r=sxy/Math.sqrt(sxx*syy); r=Math.max(-1,Math.min(1,r));
+  const b=sxy/sxx, a=my-b*mx, r2=r*r, df=n-2;
+  const perfect = 1-r2 < 1e-12;
+  const t = perfect ? (r>0?Infinity:-Infinity) : r*Math.sqrt(df/(1-r2));
+  const p = tTwoTailedP(t,df);
+  const resid = xs.map((x,i)=>ys[i]-(a+b*x));
+  const sse = resid.reduce((s,e)=>s+e*e,0);
+  const se = Math.sqrt(sse/df);
+  const strength = Math.abs(r)<0.10 ? 'none' : Math.abs(r)<0.40 ? 'weak' : Math.abs(r)<0.70 ? 'moderate' : 'strong';
+  const direction = Math.abs(r)<0.10 ? 'none' : (r>0 ? 'positive' : 'negative');
+  const tc = tCrit(alpha,df);
+  return {n,mx,my,sxx,syy,sxy,r,r2,a,b,df,t,p,se,resid,strength,direction,alpha,tc,perfect,
+          reject:p<=alpha, xmin:Math.min(...xs), xmax:Math.max(...xs), ymin:Math.min(...ys), ymax:Math.max(...ys)};
+}
+
+/* ---------- county data ---------- */
+const MEAS = CA.measures.map(m=>({key:m[0],label:m[1],unit:m[2],kind:m[3],dec:m[6]}));
+const NAMES = {
+  income:['Median household income','Income where half of households earn more and half earn less.'],
+  poverty:['Children in poverty','Share of people under 18 living in poverty.'],
+  unemp:['Unemployment rate','Share of people 16 and older who are unemployed and looking for work.'],
+  ineq:['Income gap','Income of a household at the 80th percentile divided by one at the 20th. Higher means a bigger gap.'],
+  uninsured:['People without health insurance','Share of people under 65 with no health insurance.'],
+  housing:['Housing cost burden','Share of households spending 50% or more of their income on housing.'],
+  foodins:['Food insecurity','Share of people who lack adequate access to food.'],
+  childcare:['Child care cost','Cost of child care for two children, as a share of median household income.'],
+  college:['Adults 25\u201344 with some college','Share of adults 25 to 44 with some education after high school.'],
+  broadband:['Broadband internet access','Share of households with a broadband internet connection.'],
+  lifeexp:['Life expectancy','Average number of years people are expected to live.'],
+  ypll:['Early deaths','Years of life lost before age 75, per 100,000 people (age-adjusted). Higher means more early deaths.'],
+  diabetes:['Adults with diabetes','Share of adults 18 and older diagnosed with diabetes (age-adjusted).'],
+  obesity:['Adults with obesity','Share of adults with a BMI of 30 or higher (age-adjusted).'],
+  fairpoor:['Adults in fair or poor health','Share of adults who rate their own health as fair or poor (age-adjusted).'],
+  physdays:['Bad physical health days','Average days in the past 30 that adults felt physically unwell (age-adjusted).'],
+  mentdays:['Bad mental health days','Average days in the past 30 that adults felt mentally unwell (age-adjusted).'],
+  inactive:["Adults who don't exercise",'Share of adults 18 and older with no leisure-time physical activity (age-adjusted).'],
+  smoking:['Adult smokers','Share of adults who currently smoke (age-adjusted).'],
+  prevhosp:['Preventable hospital stays','Hospital stays for conditions that good outpatient care can often prevent, per 100,000 Medicare enrollees.']
+};
+MEAS.forEach(m=>{ const n=NAMES[m.key]; m.label=n[0]; m.def=n[1]; });
+const MBY = Object.fromEntries(MEAS.map(m=>[m.key,m]));
+const HIGHER_BETTER = {lifeexp:true};
+const YEARS = {income:'2023 & 2019-2023',poverty:'2023 & 2019-2023',unemp:'2023',ineq:'2019-2023',uninsured:'2022',housing:'2019-2023',foodins:'2022',childcare:'2024 & 2023',college:'2019-2023',broadband:'2019-2023',
+  lifeexp:'2020-2022',ypll:'2020-2022',diabetes:'2022',obesity:'2022',fairpoor:'2022',physdays:'2022',mentdays:'2022',inactive:'2022',smoking:'2022',prevhosp:'2022'};
+function countyDataset(xk,yk,minPop){
+  const rows=CA.rows.filter(r=>r[xk]!==null&&r[yk]!==null&&(!minPop||r.pop>=minPop));
+  return {mode:'county',rows,xs:rows.map(r=>r[xk]),ys:rows.map(r=>r[yk]),xk,yk,total:CA.rows.length,minPop:minPop||0,
+    X:{name:MBY[xk].label,unit:MBY[xk].unit,dec:MBY[xk].dec,fmt:xk==='income'?'$':''},
+    Y:{name:MBY[yk].label,unit:MBY[yk].unit,dec:MBY[yk].dec,fmt:''}, item:'county', items:'counties'};
+}
+window.HCE = {analyze,tTwoTailedP,tCrit,countyDataset:(x,y,a,mp)=>{ const d=countyDataset(x,y,mp); return {n:d.xs.length, res:analyze(d.xs,d.ys,a||0.05), xs:d.xs, ys:d.ys}; }, MEAS};
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const MINUS='−';
+function num(v,d=3){
+  if(v===Infinity) return '∞'; if(v===-Infinity) return MINUS+'∞';
+  if(!isFinite(v)) return '—';
+  if(v!==0 && Math.abs(v)<0.001) return v.toExponential(2).replace('-',MINUS);
+  return v.toFixed(d).replace('-',MINUS);
+}
+function fmtP(p){ return p===0 ? '0' : p<0.0001 ? '< 0.0001' : p.toFixed(4); }
+function val(v,V,extra){ // value with grouping, prefix, decimals
+  const d = extra!==undefined?extra:V.dec;
+  const s=Number(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}).replace('-',MINUS);
+  return (V.fmt==='$'?'$':'')+s;
+}
+function lab(V){ return V.name+(V.unit&&V.unit.trim()?' ('+V.unit.trim()+')':''); }
+const NUM=/^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/;
+function tokens(text){ return text.replace(/[−–—]/g,'-').split(/[\s,;]+/).filter(Boolean); }
+function parseList(text){ const vals=[], bad=[]; tokens(text).forEach(t=>{ if(NUM.test(t)) vals.push(parseFloat(t)); else bad.push(t); }); return {vals,bad}; }
+function ordinal(n){ const s=['th','st','nd','rd'], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); }
+
+const STEPS=['Data','Scatterplot','Correlation','Line','Test','Conclusion'];
+const S = { started:false, guess:null, ownDs:null, parsed:null, skipSmall:false, mode:'county', ds:null, res:null, step:1, all:false, timer:null, anim:{dots:false,line:false}, csv:null };
+
+/* ---------- own-data input ---------- */
+const PLAIN=/^[+-]?(\d+(\.\d*)?|\.\d+)$/, SCI=/^[+-]?(\d+(\.\d*)?|\.\d+)[eE][+-]?\d+$/;
+const MAXABS=1e9, MINPAIRS=8, MAXPAIRS=2000;
+function splitLine(l){
+  l=l.trim();
+  if(l.indexOf('\t')>=0) return l.split('\t').map(t=>t.trim());
+  if(l.indexOf(';')>=0) return l.split(';').map(t=>t.trim());
+  if((l.match(/,/g)||[]).length===1) return l.split(',').map(t=>t.trim());
+  return l.split(/[\s,]+/).filter(Boolean);
+}
+function cleanCell(t){ return t.replace(/[−–—]/g,'-').replace(/^\$/,'').replace(/%$/,'').replace(/(\d),(?=\d{3}(\D|$))/g,'$1').trim(); }
+function firstLines(a){ return 'line'+(a.length>1?'s ':' ')+a.slice(0,5).join(', ')+(a.length>5?', ...':''); }
+function parsePairs(text){
+  const errors=[]; let header=null;
+  const lines=text.split(/\r?\n/).filter(l=>l.trim()!=='');
+  if(!lines.length) return {empty:true,errors,xs:[],ys:[],header:null};
+  const rows=lines.map(splitLine);
+  let start=0;
+  if(rows[0].length===2 && !PLAIN.test(cleanCell(rows[0][0])) && !SCI.test(cleanCell(rows[0][0])) && !PLAIN.test(cleanCell(rows[0][1])) && !SCI.test(cleanCell(rows[0][1]))){ header=[rows[0][0],rows[0][1]]; start=1; }
+  const xs=[], ys=[], bad=[], wrong=[], sci=[];
+  for(let i=start;i<rows.length;i++){
+    const r=rows[i], ln=i+1;
+    if(r.length!==2){ wrong.push(ln); continue; }
+    const a=cleanCell(r[0]), b=cleanCell(r[1]);
+    if(SCI.test(a)||SCI.test(b)){ sci.push(ln); continue; }
+    if(!PLAIN.test(a)||!PLAIN.test(b)){ bad.push(ln); continue; }
+    xs.push(parseFloat(a)); ys.push(parseFloat(b));
+  }
+  if(wrong.length) errors.push('Each line needs exactly two values (X and Y). Check '+firstLines(wrong)+'.');
+  if(bad.length) errors.push('Some values are not plain numbers. Check '+firstLines(bad)+'.');
+  if(sci.length) errors.push('Scientific notation (like 9e3) is not accepted. Write the full number on '+firstLines(sci)+'.');
+  if(!errors.length){
+    if(xs.length>MAXPAIRS) errors.push('Too many pairs ('+xs.length+'). The limit is '+MAXPAIRS+'.');
+    else if(xs.length<MINPAIRS) errors.push('You need at least '+MINPAIRS+' pairs to run a meaningful test. You have '+xs.length+'.');
+    else if(xs.concat(ys).some(v=>Math.abs(v)>MAXABS)) errors.push('Values must be between −1,000,000,000 and 1,000,000,000.');
+    else if(xs.every(v=>v===xs[0])) errors.push('All X values are the same, so no line can be fitted.');
+    else if(ys.every(v=>v===ys[0])) errors.push('All Y values are the same, so the correlation is undefined.');
+    else {
+      const arith=a=>{ const d=a[1]-a[0]; return d!==0 && a.every((v,i)=>i===0||Math.abs(v-a[i-1]-d)<1e-9); };
+      if(arith(xs)&&arith(ys)) errors.push('Both columns are evenly spaced counting sequences (like 1, 2, 3, ...). That is placeholder data and always makes a perfect line. Enter real measurements.');
+    }
+  }
+  return {empty:false,errors,xs,ys,header};
+}
+function validName(t){ t=t.trim(); return t.length>=3 && t.length<=60 && /^[A-Za-z][A-Za-z0-9 ,.'()%\/&\-]*$/.test(t) && (t.match(/[A-Za-z]/g)||[]).length>=3 && !/\d{3,}/.test(t); }
+function validUnit(t){ t=t.trim(); return t==='' || /^[A-Za-z%$#][A-Za-z0-9 %$#\/.()\-]{0,23}$/.test(t) && !/\d{3,}/.test(t); }
+function decimalsOf(arr){ let m=0; arr.forEach(v=>{ const t=String(v), i=t.indexOf('.'); if(i>=0) m=Math.max(m,t.length-i-1); }); return Math.min(m,3); }
+function ownDataset(xs,ys){
+  return {mode:'own',rows:null,xs,ys,X:{name:$('x-name').value.trim(),unit:$('x-unit').value.trim(),dec:decimalsOf(xs),fmt:''},Y:{name:$('y-name').value.trim(),unit:$('y-unit').value.trim(),dec:decimalsOf(ys),fmt:''},item:'observation',items:'observations'};
+}
+window.__parsePairs=parsePairs;
+
+/* ---------- chart ---------- */
+function niceTicks(lo,hi,n){
+  if(lo===hi){ lo-=1; hi+=1; }
+  const raw=(hi-lo)/(n-1), mag=Math.pow(10,Math.floor(Math.log10(raw))), nm=raw/mag;
+  const step=(nm<1.5?1:nm<3?2:nm<7?5:10)*mag, dec=Math.max(0,-Math.floor(Math.log10(step))+1);
+  const start=Math.floor(lo/step+1e-9)*step, end=Math.ceil(hi/step-1e-9)*step;
+  const t=[]; for(let v=start; v<=end+step*1e-6; v+=step) t.push(+v.toFixed(dec));
+  return t;
+}
+function tickLabel(v){
+  if(Math.abs(v)>=1e6||(v!==0&&Math.abs(v)<1e-3)) return v.toExponential(1);
+  return Number(+v.toFixed(6)).toLocaleString('en-US',{maximumFractionDigits:6}).replace('-',MINUS);
+}
+function drawScatter(){
+  const host=$('scatter'), ds=S.ds, res=S.res; if(!ds||!res) return;
+  const W=Math.max(300,Math.floor(host.clientWidth||600)), H=W<480?340:430;
+  const axisLines=(V,maxC)=>{ const full=lab(V); return (full.length<=maxC||!V.unit||!V.unit.trim()) ? [full] : [V.name,'('+V.unit.trim()+')']; };
+  const xl=axisLines(ds.X,(W-100)/7.2), yl=axisLines(ds.Y,(H-110)/7.2);
+  const m={l:(W<480?58:72)+(yl.length>1?34:0), r:30, t:44, b:60+(xl.length>1?16:0)};
+  const px=(res.xmax-res.xmin)*0.05||1, py=(res.ymax-res.ymin)*0.08||1;
+  const xt=niceTicks(res.xmin-px,res.xmax+px,W<480?4:7), yt=niceTicks(res.ymin-py,res.ymax+py,6);
+  const x0=xt[0], x1=xt[xt.length-1], y0=yt[0], y1=yt[yt.length-1];
+  const sx=v=>m.l+(v-x0)/(x1-x0)*(W-m.l-m.r), sy=v=>H-m.b-(v-y0)/(y1-y0)*(H-m.t-m.b);
+  const showDots = S.all||S.step>=2, showMean = !S.all&&S.step===3, showLine = S.all||S.step>=4;
+  const hi = ds.mode==='county' ? ds.rows.findIndex(r=>r.county===$('sel-county').value) : -1;
+  let s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc('Scatterplot of '+ds.Y.name+' against '+ds.X.name)+'">';
+  s+='<defs><clipPath id="clipS"><rect x="'+m.l+'" y="'+m.t+'" width="'+(W-m.l-m.r)+'" height="'+(H-m.t-m.b)+'"/></clipPath></defs>';
+  if(W>=480){ let tt=ds.Y.name+' vs. '+ds.X.name, mx=Math.floor((W-m.l-m.r)/8.6); if(tt.length>mx) tt=tt.slice(0,mx-1)+'\u2026'; s+='<text class="ttl" x="'+m.l+'" y="24">'+esc(tt)+'</text>'; }
+  yt.forEach(v=>{ s+='<line class="grid" x1="'+m.l+'" x2="'+(W-m.r)+'" y1="'+sy(v)+'" y2="'+sy(v)+'"/><text x="'+(m.l-8)+'" y="'+(sy(v)+4)+'" text-anchor="end">'+tickLabel(v)+'</text>'; });
+  xt.forEach(v=>{ s+='<line class="grid" x1="'+sx(v)+'" x2="'+sx(v)+'" y1="'+m.t+'" y2="'+(H-m.b)+'"/><text x="'+sx(v)+'" y="'+(H-m.b+18)+'" text-anchor="middle">'+tickLabel(v)+'</text>'; });
+  s+='<line class="axis" x1="'+m.l+'" x2="'+(W-m.r)+'" y1="'+(H-m.b)+'" y2="'+(H-m.b)+'"/><line class="axis" x1="'+m.l+'" x2="'+m.l+'" y1="'+m.t+'" y2="'+(H-m.b)+'"/>';
+  xl.forEach((t,i)=>{ s+='<text class="axl" x="'+((m.l+W-m.r)/2)+'" y="'+(H-12-(xl.length-1-i)*16)+'" text-anchor="middle">'+esc(t)+'</text>'; });
+  yl.forEach((t,i)=>{ s+='<text class="axl" transform="translate('+(16+i*16)+' '+((m.t+H-m.b)/2)+') rotate(-90)" text-anchor="middle">'+esc(t)+'</text>'; });
+  s+='<g clip-path="url(#clipS)">';
+  if(showMean){
+    s+='<line class="mean fade" x1="'+sx(res.mx)+'" x2="'+sx(res.mx)+'" y1="'+m.t+'" y2="'+(H-m.b)+'"/><line class="mean fade" x1="'+m.l+'" x2="'+(W-m.r)+'" y1="'+sy(res.my)+'" y2="'+sy(res.my)+'"/>';
+  }
+  if(showLine){
+    const lx0=sx(x0), ly0=sy(res.a+res.b*x0), lx1=sx(x1), ly1=sy(res.a+res.b*x1), len=Math.ceil(Math.hypot(lx1-lx0,ly1-ly0)+4);
+    s+='<line class="reg'+(S.anim.line?' anim':'')+'" style="--len:'+len+'" x1="'+lx0+'" y1="'+ly0+'" x2="'+lx1+'" y2="'+ly1+'"/>';
+  }
+  if(showDots){
+    const outs = (showLine&&ds.mode==='county') ? new Set(outliers().map(o=>o.i)) : new Set();
+    ds.xs.forEach((x,i)=>{
+      if(i===hi) return;
+      if(outs.has(i)) s+='<circle class="outring fade" cx="'+sx(x)+'" cy="'+sy(ds.ys[i])+'" r="11"/>';
+      const tip=(ds.rows?ds.rows[i].county+': ':'')+'('+val(x,ds.X)+', '+val(ds.ys[i],ds.Y)+')';
+      s+='<circle class="pt'+(S.anim.dots?' anim':'')+'" style="animation-delay:'+(S.anim.dots?Math.min(i*22,1100):0)+'ms" cx="'+sx(x)+'" cy="'+sy(ds.ys[i])+'" r="'+(ds.xs.length>80?4:5.5)+'"><title>'+esc(tip)+'</title></circle>';
+    });
+    let iMax=-1, iMin=-1;
+    {
+      iMax=ds.ys.indexOf(Math.max(...ds.ys)); iMin=ds.ys.indexOf(Math.min(...ds.ys));
+      [[iMax,-12,'Highest'],[iMin,22,'Lowest']].forEach(([i,dy,w])=>{
+        if(i===hi) return;
+        const cx=sx(ds.xs[i]), cy=sy(ds.ys[i]), right=cx>(m.l+W-m.r)/2;
+        const txt = ds.mode==='county' ? ds.rows[i].county+' ('+val(ds.ys[i],ds.Y)+')' : w+': '+val(ds.ys[i],ds.Y);
+        const tw=txt.length*7.2, L=m.l+6, R=W-m.r-6;
+        let tx=cx+(right?-9:9), ty=Math.min(Math.max(cy+dy,m.t+12),H-m.b-8);
+        tx = right ? Math.max(tx,L+tw) : Math.min(tx,R-tw);
+        s+='<text class="extxt fade" x="'+tx+'" y="'+ty+'" text-anchor="'+(right?'end':'start')+'">'+esc(txt)+'</text>';
+      });
+    }
+    if(hi>=0){
+      const cx=sx(ds.xs[hi]), cy=sy(ds.ys[hi]), name=ds.rows[hi].county+(hi===iMax?' (highest)':hi===iMin?' (lowest)':'');
+      const right = cx > (m.l+W-m.r)/2;
+      s+='<circle class="hlring fade" cx="'+cx+'" cy="'+cy+'" r="12"/><circle class="hlpt'+(S.anim.dots?' anim':'')+'" style="animation-delay:'+(S.anim.dots?Math.min(hi*22,1100)+300:0)+'ms" cx="'+cx+'" cy="'+cy+'" r="6.5"><title>'+esc(name+': ('+val(ds.xs[hi],ds.X)+', '+val(ds.ys[hi],ds.Y)+')')+'</title></circle>';
+      s+='<text class="hltxt fade" x="'+(cx+(right?-16:16))+'" y="'+(cy-14)+'" text-anchor="'+(right?'end':'start')+'">'+esc(name)+'</text>';
+    }
+  }
+  s+='</g></svg>';
+  host.innerHTML=s;
+  let lg='';
+  if(showDots) lg+='<span><i style="background:var(--pt)"></i>'+esc(ds.item==='county'?'County':'Observation')+'</span>';
+  if(showDots&&hi>=0) lg+='<span><i style="background:var(--hl)"></i>'+esc($('sel-county').value)+'</span>';
+  if(showDots) lg+='<span>Gray labels: highest and lowest '+esc(ds.Y.name.toLowerCase())+'</span>';
+  if(showLine) lg+='<span><i style="background:var(--accent)"></i>Least-squares line</span>';
+  if(showLine&&ds.mode==='county'&&outliers().length) lg+='<span><i style="background:none;border:2px dashed var(--flag)"></i>Unusual county (far from the line)</span>';
+  if(showMean) lg+='<span>Dashed lines: mean of X and mean of Y</span>';
+  $('legend').innerHTML=lg;
+}
+S.anim={dots:false,line:false};
+
+function tCurveSVG(res){
+  const W=300, H=170, m={l:10,r:10,t:14,b:30};
+  const L=Math.max(4.5,Math.min(Math.abs(res.t)+1,8));
+  const sx=v=>m.l+(v+L)/(2*L)*(W-m.l-m.r), pk=tPdf(0,res.df), sy=v=>H-m.b-(v/pk)*(H-m.t-m.b-10);
+  const N=160, pts=[]; for(let i=0;i<=N;i++){ const t=-L+2*L*i/N; pts.push([t,tPdf(t,res.df)]); }
+  const line=pts.map((p,i)=>(i?'L':'M')+sx(p[0]).toFixed(1)+' '+sy(p[1]).toFixed(1)).join('');
+  let s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="t distribution with the test statistic and critical values marked" class="chart">';
+  const tail=(a,b)=>{ const seg=pts.filter(p=>p[0]>=a&&p[0]<=b); if(seg.length<2) return ''; return '<path class="tail fade" d="M'+sx(seg[0][0]).toFixed(1)+' '+sy(0)+seg.map(p=>'L'+sx(p[0]).toFixed(1)+' '+sy(p[1]).toFixed(1)).join('')+'L'+sx(seg[seg.length-1][0]).toFixed(1)+' '+sy(0)+'Z"/>'; };
+  const ta=Math.abs(res.t);
+  if(isFinite(ta)&&ta<=L){ s+=tail(-L,-ta)+tail(ta,L); }
+  s+='<path class="tc" d="'+line+'"/><line class="axis" x1="'+m.l+'" x2="'+(W-m.r)+'" y1="'+sy(0)+'" y2="'+sy(0)+'"/>';
+  if(res.tc<=L){ [-res.tc,res.tc].forEach(c=>{ s+='<line class="crit" x1="'+sx(c)+'" x2="'+sx(c)+'" y1="'+(m.t+6)+'" y2="'+sy(0)+'"/><text x="'+sx(c)+'" y="'+(H-m.b+14)+'" text-anchor="middle">'+(c<0?MINUS:'')+num(res.tc,2)+'</text>'; }); }
+  s+='<text x="'+sx(0)+'" y="'+(H-m.b+14)+'" text-anchor="middle">0</text>';
+  if(isFinite(res.t)&&ta<=L){ s+='<line class="tobs" x1="'+sx(res.t)+'" x2="'+sx(res.t)+'" y1="'+m.t+'" y2="'+sy(0)+'"/><text class="tobs-t" x="'+sx(res.t)+'" y="'+(m.t-3)+'" text-anchor="middle">t = '+num(res.t,2)+'</text>'; }
+  else { const right=res.t>0; s+='<text class="tobs-t" x="'+(right?W-m.r:m.l)+'" y="'+(m.t+8)+'" text-anchor="'+(right?'end':'start')+'">t = '+num(res.t,2)+(right?' →':'')+'</text>';}
+  s+='</svg>';
+  return s;
+}
+
+/* ---------- text builders ---------- */
+function outliers(){
+  const {ds,res}=S; if(ds.mode!=='county'||!(res.se>0)) return [];
+  return ds.rows.map((r,i)=>({r,i,z:res.resid[i]/res.se})).filter(o=>Math.abs(o.z)>2);
+}
+function sm(v){ const a=Math.abs(v); if(a>=0.01) return num(a,3); return a.toFixed(8).replace(/0+$/,'').replace(/\.$/,''); }
+function slopeScale(b){ // pick a friendlier step size when the slope per 1 unit is tiny
+  const ab=Math.abs(b); if(ab>=0.01||ab===0) return 1;
+  return Math.pow(10,Math.round(-Math.log10(ab))); }
+function scaleStr(sc){ return sc.toLocaleString('en-US'); }
+function slopeSentence(res,ds){
+  const X=ds.X.name.toLowerCase(), Y=ds.Y.name.toLowerCase(), sc=slopeScale(res.b), ch=Math.abs(res.b)*sc;
+  const xu=ds.X.unit.trim(), yu=ds.Y.unit.trim();
+  return 'The slope is '+(res.b<0?MINUS:'')+sm(res.b)+(sc>1?'. Put differently, for every ':': for every ')+(sc>1?scaleStr(sc)+'-unit':'1-unit')+' increase in '+X+(xu?' (measured in '+xu+')':'')+', the line predicts '+Y+' to '+(res.b>=0?'increase':'decrease')+' by about '+num(ch,2)+(yu?' '+yu:'')+'.';
+}
+function equation(res){ return 'ŷ = '+num(res.a)+' '+(res.b<0?MINUS:'+')+' '+sm(res.b)+'x'; }
+function dirWord(res){ return res.direction==='none'?'approximately none':res.direction; }
+function interpretation(){
+  const {ds,res}=S, X=ds.X.name.toLowerCase(), Y=ds.Y.name.toLowerCase(), alpha=res.alpha;
+  const scope = ds.mode==='county' ? 'Across these '+res.n+' California counties' : 'In this sample of '+res.n+' observations';
+  const out=[];
+  out.push(res.direction==='none'
+    ? scope+', there is approximately no linear relationship between '+X+' and '+Y+' (r = '+num(res.r,3)+').'
+    : scope+', '+X+' and '+Y+' have a '+res.strength+' '+res.direction+' linear relationship (r = '+num(res.r,3)+'). Counties with higher '+X+' tend to have '+(res.r>0?'higher':'lower')+' '+Y+'.');
+  out.push(res.reject
+    ? 'At the '+Math.round(alpha*100)+'% significance level, the p-value ('+(res.p>0&&res.p<0.0001?'less than 0.0001':fmtP(res.p))+') is at most α, so we reject H₀. There is statistically significant evidence of a '+(res.r>0?'positive':'negative')+' linear relationship between '+X+' and '+Y+'.'
+    : 'At the '+Math.round(alpha*100)+'% significance level, the p-value ('+fmtP(res.p)+') is greater than α, so we fail to reject H₀. There is not enough evidence of a linear relationship between '+X+' and '+Y+'. A pattern this weak could easily happen by chance.');
+  out.push(slopeSentence(res,ds)+' R² = '+num(res.r2,3)+', so about '+(res.r2*100).toFixed(1)+'% of the variation in '+Y+' is explained by '+X+' in this data.');
+  return out;
+}
+
+function panelFor(step){
+  const {ds,res}=S, nm=ds.mode==='county';
+  if(step===1){
+    const left = nm ? ds.total-res.n : 0, skipped = nm && ds.minPop ? CA.rows.filter(r=>r.pop<ds.minPop).length : 0;
+    return '<h3>1. The data</h3><p>'+(nm?'One pair of numbers per county.':'One pair of numbers per observation.')+'</p>'
+      +'<table><tr><td>Pairs, n</td><td class="v">'+res.n+'</td></tr><tr><td>Mean of X</td><td class="v">'+val(res.mx,ds.X)+'</td></tr><tr><td>Mean of Y</td><td class="v">'+val(res.my,ds.Y)+'</td></tr></table>'
+      +(skipped>0?'<p class="hint">'+skipped+' counties with fewer than 20,000 residents were left out by your choice.</p>':'')+((left-skipped)>0?'<p class="hint">'+(left-skipped)+' '+((left-skipped)>1?'counties have':'county has')+' no data for one of these measures, so '+((left-skipped)>1?'they are':'it is')+' left out.</p>':'');
+  }
+  if(step===2) return '<h3>2. The scatterplot</h3><p>Each dot is one '+ds.item+'. Do the dots rise, fall, or just scatter?</p>';
+  if(step===3) return '<h3>3. The correlation, r</h3><div class="big">r = '+num(res.r,4)+'</div><p>The relationship is <b>'+(res.direction==='none'?'approximately none':res.strength+' and '+res.direction)+'</b>.</p>';
+  if(step===4) return '<h3>4. The regression line</h3><div class="big">'+esc(equation(res))+'</div><p>'+esc(slopeSentence(res,ds))+' R² = '+num(res.r2,3)+' means about '+(res.r2*100).toFixed(1)+'% of the variation in Y is explained by the line.</p>';
+  if(step===5){
+    const tline = res.perfect ? 't = '+(res.t>0?'':MINUS)+'∞ (the points fall exactly on a line)' : 't = r√[(n−2)/(1−r²)] = '+num(res.r,4)+'√['+res.df+'/(1−'+num(res.r2,4)+')] = <b>'+num(res.t,3)+'</b>';
+    return '<h3>5. Could this be chance?</h3><div class="calc">H₀: ρ = 0 (no linear relationship)<br>Hₐ: ρ ≠ 0 (there is one)<br>α = '+res.alpha+', two-tailed</div>'
+      +'<div class="calc">'+tline+'<br>df = n − 2 = '+res.df+'<br>p-value = <b>'+fmtP(res.p)+'</b>'+(res.p>0&&res.p<0.0001?' (exactly '+res.p.toExponential(3)+')':'')+'<br>Critical values: ±'+num(res.tc,3)+'</div>'
+      +tCurveSVG(res)+'<p class="hint">Shaded: p-value. Dashed: critical values.</p>';
+  }
+  const pTxt = res.p>0&&res.p<0.0001 ? 'p &lt; 0.0001' : 'p = '+fmtP(res.p);
+  const verdict = res.reject
+    ? '<div class="verdict">Because '+pTxt+' is less than or equal to α = '+res.alpha+', we <b>reject H₀</b>. There is statistically significant evidence of a '+(res.r>0?'positive':'negative')+' linear relationship between '+esc(ds.X.name.toLowerCase())+' and '+esc(ds.Y.name.toLowerCase())+'.</div>'
+    : '<div class="verdict no">Because '+pTxt+' is greater than α = '+res.alpha+', we <b>fail to reject H₀</b>. There is not enough evidence of a linear relationship between '+esc(ds.X.name.toLowerCase())+' and '+esc(ds.Y.name.toLowerCase())+'.</div>';
+  let guessHtml='';
+  if(nm && S.guess){
+    const truth = !res.reject ? 'none' : (res.r>0?'up':'down'), names={up:'rise together',down:'one rises, the other falls',none:'no connection'};
+    const ok = truth===S.guess;
+    guessHtml='<p><b>'+(ok?'You called it.':'Not quite.')+'</b> You guessed &ldquo;'+names[S.guess]+'&rdquo;; the data show '+(truth==='none'?'no significant relationship':(truth==='up'?'a positive':'a negative')+' relationship')+' (r = '+num(res.r,3)+').</p>';
+  }
+  const outs=outliers(); let outHtml='', smallCtl='';
+  if(nm){
+    const nsmall=CA.rows.filter(r=>r.pop<20000).length;
+    smallCtl='<p class="hint">Counties under 20,000 residents ('+nsmall+'): <b>'+(ds.minPop?'left out':'included')+'</b>. <button type="button" data-act="skip" style="padding:4px 10px;font-size:14px">'+(ds.minPop?'Put them back':'Leave them out and re-run')+'</button></p>';
+  }
+  if(outs.length){
+    outHtml='<p><b>Unusual counties</b> (more than 2 standard errors from the line): '+outs.map(o=>esc(o.r.county)+(o.r.pop<20000?' (only '+o.r.pop.toLocaleString('en-US')+' residents)':'')).join(', ')+'.'+(outs.some(o=>o.r.pop<20000)&&!ds.minPop?' Small counties can pull the line off course.':'')+'</p>';
+  }
+  return '<h3>6. The conclusion</h3>'+guessHtml+verdict+interpretation().slice(0,1).map(t=>'<p>'+esc(t)+'</p>').join('')+outHtml+smallCtl;
+}
+
+/* ---------- rendering ---------- */
+function renderSteps(){
+  const ol=$('steps');
+  ol.innerHTML=STEPS.map((n,i)=>{
+    const k=i+1, cur=!S.all&&S.step===k, done=S.all||S.step>k;
+    return '<li><button type="button" class="stepbtn'+(done?' done':'')+'" data-step="'+k+'"'+(cur?' aria-current="step"':'')+'><span class="dot">'+(done&&!cur?'✓':k)+'</span><span>'+n+'</span></button></li>';
+  }).join('');
+  ol.querySelectorAll('.stepbtn').forEach(b=>{ b.disabled=!!S.timer; b.addEventListener('click',()=>goStep(parseInt(b.dataset.step))); });
+  $('playnote').textContent = S.timer ? 'Playing, step '+S.step+' of '+STEPS.length+'. Press Pause to go back or forward yourself.' : '';
+  $('barfill').style.width = (S.all?100:(S.step-1)/(STEPS.length-1)*100)+'%';
+  $('btn-back').disabled = S.all||S.step===1||!!S.timer;
+  $('btn-next').disabled = S.all||S.step===STEPS.length||!!S.timer;
+  $('btn-play').textContent = S.timer ? 'Pause' : 'Play';
+  $('btn-all').setAttribute('aria-pressed',String(S.all));
+  $('btn-all').textContent = S.all ? 'Step by step' : 'Show everything';
+}
+function renderPanel(){
+  const p=$('panel');
+  if(S.all){ p.classList.add('all'); p.innerHTML=[1,2,3,4,5,6].map(panelFor).join(''); }
+  else { p.classList.remove('all'); p.innerHTML=panelFor(S.step); }
+}
+function showUse(){ return S.ds&&S.ds.mode==='county'&&(S.all||S.step===STEPS.length); }
+function renderUse(){
+  const sec=$('sec-use'); sec.hidden=!showUse();
+  if(!showUse()) return;
+  const {ds,res}=S;
+  $('county-wrap').hidden = ds.mode!=='county';
+  if(ds.mode==='county'){
+    const name=$('sel-county').value, i=ds.rows.findIndex(r=>r.county===name);
+    $('county-h').textContent = name+' County compared with the other counties';
+    if(i<0){
+      $('county-card').innerHTML='';
+      $('county-text').textContent=name+' has no data for one of these two measures, so it cannot be placed on the chart. Pick another measure or another county.';
+    } else {
+      const x=ds.xs[i], y=ds.ys[i], yh=res.a+res.b*x, d=y-yh;
+      const rx=ds.xs.filter(v=>v>x).length+1, ry=ds.ys.filter(v=>v>y).length+1, n=res.n;
+      $('county-card').innerHTML=
+        '<div class="stat"><div class="k">'+esc(ds.X.name)+'</div><div class="v">'+val(x,ds.X)+'</div><div class="hint">'+ordinal(rx)+' highest of '+n+'</div></div>'
+       +'<div class="stat"><div class="k">'+esc(ds.Y.name)+' (actual)</div><div class="v">'+val(y,ds.Y)+'</div><div class="hint">'+ordinal(ry)+' highest of '+n+'</div></div>'
+       +'<div class="stat"><div class="k">Predicted by the line</div><div class="v">'+val(yh,ds.Y)+'</div><div class="hint">difference: '+(d>=0?'+':MINUS)+val(Math.abs(d),ds.Y,Math.max(ds.Y.dec,1))+'</div></div>';
+      const better = HIGHER_BETTER[ds.yk] ? d>0 : d<0, tiny=Math.abs(d)<res.se*0.25;
+      let t = name+' has '+(tiny?'about what the line predicts':'a '+esc(ds.Y.name.toLowerCase())+' '+(d>0?'above':'below')+' the line'+(HIGHER_BETTER[ds.yk]?'':(better?', which is the healthier direction':', which is the less healthy direction')))+'. ';
+      if(!tiny) t+= 'Counties above or below the line have other factors at work that '+esc(ds.X.name.toLowerCase())+' does not capture. ';
+      if(!res.reject) t+='Keep in mind the overall relationship was not statistically significant, so the line is a weak guide. ';
+      const pop=ds.rows[i].pop; if(pop<20000) t+='This is a small county ('+pop.toLocaleString('en-US')+' residents), so its numbers are less reliable.';
+      $('county-text').textContent = t.replace(/&amp;/g,'&');
+    }
+  }
+}
+function renderAll(){
+  $('sec-steps').hidden=false;
+  renderSteps(); renderPanel(); drawScatter(); renderUse();
+  S.anim={dots:false,line:false};
+}
+
+/* ---------- stepper control ---------- */
+function stopPlay(){ if(S.timer){ clearInterval(S.timer); S.timer=null; } }
+function goStep(k){
+  if(!S.res) return;
+  k=Math.max(1,Math.min(STEPS.length,k));
+  S.all=false;
+  const prev=S.step;
+  if(k===2&&prev<2) S.anim.dots=true;
+  if(k===2&&prev>2) S.anim.dots=false;
+  if(k===4&&prev<4) S.anim.line=true;
+  if(k===1||k===2&&prev>=2) { /* no extra anim */ }
+  S.step=k;
+  if(k===2&&prev===1) S.anim.dots=true;
+  renderAll();
+  if(k===STEPS.length) { stopPlay(); renderSteps(); }
+}
+
+/* ---------- compute + messages ---------- */
+function showMessages(errors,notes){
+  let h='';
+  if(errors.length) h+='<div class="banner err"><b>Please fix the following:</b><ul>'+errors.map(e=>'<li>'+e+'</li>').join('')+'</ul></div>';
+  (notes||[]).forEach(w=>{ h+='<div class="banner note">'+esc(w)+'</div>'; });
+  $('msgs').innerHTML=h;
+}
+function hideResults(){ stopPlay(); S.res=null; S.ds=null; $('sec-steps').hidden=true; $('sec-use').hidden=true; }
+function compute(resetStep){
+  stopPlay();
+  const alpha=parseFloat($('alpha').value);
+  let ds;
+  if(S.mode==='county'){
+    if(!S.started){ hideResults(); return; }
+    ds=countyDataset($('sel-x').value,$('sel-y').value,S.skipSmall?20000:0);
+  } else {
+    if(!S.ownDs){ hideResults(); return; }
+    ds=S.ownDs;
+  }
+  S.ds=ds; S.res=analyze(ds.xs,ds.ys,alpha);
+  if(resetStep){ S.step=1; S.all=false; S.anim={dots:false,line:false}; }
+  renderAll();
+}
+
+/* ---------- guess (county mode) ---------- */
+function updateDefs(){
+  const x=MBY[$('sel-x').value], y=MBY[$('sel-y').value];
+  $('defs').innerHTML='<p><b>X, '+esc(x.label)+':</b> '+esc(x.def)+'</p><p><b>Y, '+esc(y.label)+':</b> '+esc(y.def)+'</p>';
+}
+function updateGuessQuestion(){
+  updateDefs();
+  const x=MBY[$('sel-x').value].label.toLowerCase(), y=MBY[$('sel-y').value].label.toLowerCase();
+  $('guess-q').textContent='Before you see the data: how do you think '+x+' and '+y+' move across California counties?';
+}
+function resetCounty(){
+  S.started=false; S.guess=null; S.skipSmall=false; hideResults();
+  $('guess').hidden=false; updateGuessQuestion();
+}
+
+/* ---------- own data: preview + analyze ---------- */
+S.autoX=''; S.autoY='';
+function renderPreview(){
+  const pv=$('preview'), parsed=parsePairs($('pairs').value);
+  S.ownDs=null; S.parsed=parsed; hideResults();
+  if(parsed.empty){ pv.hidden=true; showMessages([],[]); return; }
+  if(parsed.header){
+    if(!$('x-name').value.trim()||$('x-name').value===S.autoX){ $('x-name').value=parsed.header[0].trim().slice(0,60); S.autoX=$('x-name').value; }
+    if(!$('y-name').value.trim()||$('y-name').value===S.autoY){ $('y-name').value=parsed.header[1].trim().slice(0,60); S.autoY=$('y-name').value; }
+  }
+  if(parsed.errors.length){ pv.hidden=true; showMessages(parsed.errors,[]); return; }
+  showMessages([],[]);
+  const n=parsed.xs.length, rows=Math.min(n,6);
+  $('pv-title').textContent='Read '+n+' pairs. X is the first column, Y is the second.';
+  $('pv-xh').textContent=$('x-name').value.trim()||'X'; $('pv-yh').textContent=$('y-name').value.trim()||'Y';
+  let b=''; for(let i=0;i<rows;i++) b+='<tr><td>'+esc(parsed.xs[i])+'</td><td>'+esc(parsed.ys[i])+'</td></tr>';
+  if(n>rows) b+='<tr><td>&hellip;</td><td>&hellip;</td></tr>';
+  $('pv-body').innerHTML=b; pv.hidden=false;
+}
+function analyzeOwn(){
+  const parsed=parsePairs($('pairs').value), errs=parsed.errors.slice();
+  if(parsed.empty) errs.push('Paste your data or upload a CSV first.');
+  if(!validName($('x-name').value)) errs.push('Name your X variable using letters (3 to 60 characters, no long digit strings).');
+  if(!validName($('y-name').value)) errs.push('Name your Y variable using letters (3 to 60 characters, no long digit strings).');
+  if(!validUnit($('x-unit').value)||!validUnit($('y-unit').value)) errs.push('Units should be short text like dollars, years or %. Leave them blank if unsure.');
+  if(errs.length){ showMessages(errs,[]); return; }
+  if($('x-name').value.trim().toLowerCase()===$('y-name').value.trim().toLowerCase()){ showMessages(['X and Y need different names.'],[]); return; }
+  showMessages([],[]);
+  S.ownDs=ownDataset(parsed.xs,parsed.ys); compute(true);
+  $('sec-steps').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function setPairs(xs,ys,hx,hy){
+  $('pairs').value=(hx!==undefined?hx+'\t'+hy+'\n':'')+xs.map((x,i)=>x+'\t'+ys[i]).join('\n');
+}
+
+/* ---------- CSV ---------- */
+function parseCSV(text){
+  const first=text.split(/\r?\n/,1)[0]||'';
+  const delim = (first.match(/\t/g)||[]).length>=1 ? '\t' : (first.match(/;/g)||[]).length>(first.match(/,/g)||[]).length ? ';' : ',';
+  const rows=[]; let row=[], cur='', q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){ cur+='"'; i++; } else q=false; } else cur+=c; }
+    else if(c==='"') q=true;
+    else if(c===delim){ row.push(cur); cur=''; }
+    else if(c==='\n'||c==='\r'){ if(c==='\r'&&text[i+1]==='\n') i++; row.push(cur); cur=''; if(row.some(v=>v.trim()!=='')) rows.push(row); row=[]; }
+    else cur+=c;
+  }
+  row.push(cur); if(row.some(v=>v.trim()!=='')) rows.push(row);
+  return rows;
+}
+function loadCSV(text){
+  const rows=parseCSV(text);
+  if(rows.length<2){ showMessages(['That file has no data rows.'],[]); return; }
+  const header=rows[0], body=rows.slice(1);
+  const numCols=header.map((h,j)=>({j,h:h.trim()||('Column '+(j+1)),ok:body.filter(r=>PLAIN.test(cleanCell(r[j]||''))).length>=Math.max(3,body.length*0.6)})).filter(c=>c.ok);
+  if(numCols.length<2){ showMessages(['The file needs at least two columns of numbers with a header row on top. Found '+numCols.length+'.'],[]); return; }
+  S.csv={body,numCols};
+  const opts=numCols.map(c=>'<option value="'+c.j+'">'+esc(c.h)+'</option>').join('');
+  $('csv-x').innerHTML=opts; $('csv-y').innerHTML=opts; $('csv-y').selectedIndex=1;
+  $('csv-pick').hidden = numCols.length===2;
+  applyCSV();
+}
+function applyCSV(){
+  if(!S.csv) return;
+  const jx=parseInt($('csv-x').value), jy=parseInt($('csv-y').value);
+  if(jx===jy){ showMessages(['Choose two different columns for X and Y.'],[]); return; }
+  const xs=[], ys=[]; let skipped=0;
+  S.csv.body.forEach(r=>{ const a=cleanCell(r[jx]||''), b=cleanCell(r[jy]||''); if(PLAIN.test(a)&&PLAIN.test(b)){ xs.push(a); ys.push(b); } else skipped++; });
+  const hx=S.csv.numCols.find(c=>c.j===jx).h, hy=S.csv.numCols.find(c=>c.j===jy).h;
+  $('x-name').value=hx.slice(0,60); $('y-name').value=hy.slice(0,60); S.autoX=$('x-name').value; S.autoY=$('y-name').value;
+  $('x-unit').value=''; $('y-unit').value='';
+  setPairs(xs,ys,hx.replace(/\t/g,' '),hy.replace(/\t/g,' '));
+  renderPreview();
+  if(skipped&&!S.parsed.errors.length) $('msgs').innerHTML='<div class="banner note">'+skipped+' row'+(skipped>1?'s were':' was')+' skipped because X or Y was missing or not a number.</div>';
+}
+
+/* ---------- setup ---------- */
+function setMode(m){
+  S.mode=m; stopPlay();
+  $('tab-county').setAttribute('aria-selected',String(m==='county')); $('tab-own').setAttribute('aria-selected',String(m==='own'));
+  $('mode-county').hidden=m!=='county'; $('mode-own').hidden=m!=='own';
+  $('msgs').innerHTML=''; hideResults();
+  if(m==='county'){ if(S.started) compute(true); }
+  else if($('pairs').value.trim()) renderPreview();
+}
+function loadExample(){
+  const d=countyDataset('income','lifeexp',0);
+  $('x-name').value='Median household income'; $('x-unit').value='dollars'; $('y-name').value='Life expectancy'; $('y-unit').value='years';
+  S.autoX=''; S.autoY='';
+  setPairs(d.xs,d.ys); renderPreview();
+  if(!S.parsed.errors.length) analyzeOwn();
+}
+
+const xOpts=MEAS.filter(m=>m.kind==='X'), yOpts=MEAS.filter(m=>m.kind==='Y');
+$('sel-x').innerHTML=xOpts.map(m=>'<option value="'+m.key+'">'+esc(m.label)+'</option>').join('');
+$('sel-y').innerHTML=yOpts.map(m=>'<option value="'+m.key+'">'+esc(m.label)+'</option>').join('');
+$('sel-county').innerHTML=CA.rows.map(r=>'<option value="'+esc(r.county)+'"'+(r.county==='Orange'?' selected':'')+'>'+esc(r.county)+'</option>').join('');
+$('sel-x').value='income'; $('sel-y').value='lifeexp';
+
+['sel-x','sel-y'].forEach(id=>$(id).addEventListener('change',resetCounty));
+document.querySelectorAll('#guess [data-g]').forEach(b=>b.addEventListener('click',()=>{
+  S.guess=b.dataset.g; S.started=true; $('guess').hidden=true; compute(true);
+  $('sec-steps').scrollIntoView({behavior:'smooth',block:'start'});
+}));
+$('panel').addEventListener('click',e=>{ const b=e.target.closest('[data-act="skip"]'); if(b){ S.skipSmall=!S.skipSmall; compute(false); } });
+$('sel-county').addEventListener('change',()=>{ if(S.res&&S.ds.mode==='county'){ S.anim={dots:false,line:false}; renderAll(); } });
+$('alpha').addEventListener('change',()=>{ if(S.res) compute(false); });
+$('tab-county').addEventListener('click',()=>setMode('county'));
+$('tab-own').addEventListener('click',()=>setMode('own'));
+let pt; $('pairs').addEventListener('input',()=>{ clearTimeout(pt); pt=setTimeout(renderPreview,250); });
+['x-name','y-name'].forEach(id=>$(id).addEventListener('input',()=>{ if($('preview').hidden===false){ $('pv-xh').textContent=$('x-name').value.trim()||'X'; $('pv-yh').textContent=$('y-name').value.trim()||'Y'; } if(S.ownDs){ S.ownDs=null; hideResults(); } }));
+$('btn-analyze').addEventListener('click',analyzeOwn);
+$('btn-swap').addEventListener('click',()=>{
+  if(!S.parsed||S.parsed.errors.length||S.parsed.empty) return;
+  const nx=$('x-name').value, ny=$('y-name').value, ux=$('x-unit').value, uy=$('y-unit').value;
+  $('x-name').value=ny; $('y-name').value=nx; $('x-unit').value=uy; $('y-unit').value=ux; S.autoX=''; S.autoY='';
+  setPairs(S.parsed.ys,S.parsed.xs); renderPreview();
+});
+$('btn-clear').addEventListener('click',()=>{ ['pairs','x-name','y-name','x-unit','y-unit'].forEach(id=>$(id).value=''); S.csv=null; S.ownDs=null; S.parsed=null; S.autoX=S.autoY=''; $('csv-pick').hidden=true; $('file').value=''; $('preview').hidden=true; $('msgs').innerHTML=''; hideResults(); });
+$('btn-example').addEventListener('click',loadExample);
+$('btn-file').addEventListener('click',()=>$('file').click());
+$('file').addEventListener('change',e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>loadCSV(String(r.result)); r.onerror=()=>showMessages(['The file could not be read.'],[]); r.readAsText(f); e.target.value=''; });
+$('csv-x').addEventListener('change',applyCSV); $('csv-y').addEventListener('change',applyCSV);
+$('btn-next').addEventListener('click',()=>goStep(S.step+1));
+$('btn-back').addEventListener('click',()=>goStep(S.step-1));
+$('btn-play').addEventListener('click',()=>{
+  if(S.timer){ stopPlay(); renderSteps(); return; }
+  if(S.all||S.step===STEPS.length) goStep(1);
+  S.timer=setInterval(()=>{ if(S.step>=STEPS.length) { stopPlay(); renderSteps(); } else goStep(S.step+1); },3800);
+  renderSteps();
+});
+$('btn-all').addEventListener('click',()=>{ stopPlay(); S.all=!S.all; if(!S.all) S.step=1; S.anim={dots:false,line:false}; renderAll(); });
+let rt; window.addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(()=>{ S.anim={dots:false,line:false}; drawScatter(); },120); });
+if(window.ResizeObserver){ let last=0; new ResizeObserver(()=>{ const w=$('scatter').clientWidth; if(w&&Math.abs(w-last)>2){ last=w; S.anim={dots:false,line:false}; drawScatter(); } }).observe($('scatter')); }
+
+updateGuessQuestion();
+})();
+</script>
+</body></html>
